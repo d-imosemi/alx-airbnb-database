@@ -1,111 +1,58 @@
-# High Usage Columns in the Database tables
-Here are the high-usage columns to focus on, based on typical AirBnB-like queries (JOINs on user_id/property_id, filters by status/dates, ORDER BY on names/titles, WHERE on emails/dates):
+# Index Optimization – ALX Airbnb Database Project
 
-## 1. Users table
+This task demonstrates how **indexes** can be used to improve query performance in the Airbnb database schema.
+---
 
-- user_id (PK): used in JOINs to bookings; sometimes in ORDER BY.
-- email: frequent WHERE lookups (login/uniqueness).
-- last_name, first_name: used in ORDER BY; sometimes filtered (search).
-- created_at: filtered or sorted by signup date.
-- status/active: filtered to exclude suspended/inactive users.
+# Step 1: Identify high-usage columns
+- ** From the `schema`: **
+  ## User table
+  -  email (often used for lookups)
+  -  user_id (foreign key in Booking, Property, Review)
+  
+  ## Property table
+  -  property_id (foreign key in Booking, Review)
+  -  location (likely used for searches/filtering)
 
-### User Table High-Usage Columns
+  ## Booking table
+  -  user_id (foreign key from User)
+  -  property_id (foreign key from Property)
+  -  status (could be filtered often: WHERE status = 'Confirmed')
 
-**Columns likely used in WHERE clauses:**
-```sql
--- Authentication and lookups
-WHERE email = 'user@example.com'
-WHERE last_name = 'john_doe'
-WHERE user_id = 123
-WHERE status = 'active'
-
--- Date-based queries
-WHERE created_at >= '2024-01-01'
-WHERE last_login >= CURRENT_DATE - INTERVAL '30 days'
-```
-
---- 
-## 2. Bookings table
-
-- booking_id (PK): primary key access and sorting in reports.
-- user_id (FK): JOIN to users; frequent WHERE filter (user’s bookings).
-- property_id (FK): JOIN to properties; frequent WHERE/GROUP BY (per-property stats).
-- start_date, end_date: WHERE date-range searches and availability checks; ORDER BY.
-- created_at: recent activity feeds, audits; ORDER BY.
-- status: WHERE filters (confirmed/cancelled/completed).
-- price_total or nightly_rate (if present): reporting/filtering.
-- payment_status: WHERE filters (unpaid, partial, paid).
-
-### Booking Table High-Usage Columns
-
-**Columns likely used in WHERE/JOIN clauses:**
-```sql
--- User and property relationships
-WHERE user_id = 456
-WHERE property_id = 789
-WHERE status IN ('confirmed', 'completed')
-
--- Date range queries (very common!)
-WHERE start_date BETWEEN '2024-01-01' AND '2024-01-31'
-WHERE end_out_date >= CURRENT_DATE
-WHERE booking_date >= CURRENT_DATE - INTERVAL '90 days'
-
--- Financial queries
-WHERE price_total > 1000
-WHERE payment_status = 'paid'
-```
 
 ---
-## 3. Properties table
 
-- property_id (PK): JOIN to bookings and reviews; sometimes ORDER BY.
-- title: used in ORDER BY/search results.
-- host_id (FK to users): JOINs for host dashboards.
-- city_id/location fields (city, state, country or geohash): frequent WHERE filters.
-- price/nightly_rate: filtered/sorted in search.
-- bedrooms/capacity/property_type: faceted filters.
-- created_at: newest listings sort/filter.
-- active/status: WHERE to hide inactive/unlisted.
+## 1. Indexes Created
+The following indexes were added (see `database_index.sql`):
 
-### Property Table High-Usage Columns
-
-**Columns likely used in WHERE clauses:**
-```sql
--- Location-based queries
-WHERE city = 'New York'
-WHERE country = 'USA'
-WHERE zip_code = '10001'
-
--- Filtering and search
-WHERE property_type = 'apartment'
-WHERE price_per_night BETWEEN 50 AND 200
-WHERE bedrooms >= 2
-WHERE rating >= 4.0
-WHERE active = true
-
--- Host relationships
-WHERE host_id = 123
-```
+- **User Table**
+  - `idx_user_email` → optimizes login and lookups by email.
+- **Booking Table**
+  - `idx_booking_user_id` → speeds up joins with the `User` table.
+  - `idx_booking_property_id` → speeds up joins with the `Property` table.
+  - `idx_booking_user_property` → improves performance when filtering by both user and property.
+  - `idx_booking_date` → useful for date range searches.
+- **Property Table**
+  - `idx_property_location` → optimizes queries filtering/searching by location.
 
 ---
-## Indexing tips (to improve performance)
 
-- Ensure all PKs and FKs are indexed:
-  - bookings(user_id), bookings(property_id)
-  - properties(host_id), properties(city_id)
-  - users(email) UNIQUE
-- Common composites:
-  - bookings(property_id, start_date) for availability and per-property ranges.
-  - bookings(user_id, start_date DESC) for user booking history.
-  - bookings(property_id, created_at DESC) for recent bookings per property.
-  - users(last_name, first_name) if you sort/filter by names often.
-  - properties(city_id, price) for search filtering; properties(active, city_id) if you filter by active first.
-- ORDER BY alone rarely benefits from an index unless paired with a selective WHERE or the index fully covers the query.
-- Avoid over-indexing; monitor actual query plans and add indexes where they reduce cost.
+## 2. Measuring Performance
+I tested queries before and after adding indexes using `EXPLAIN`.
 
 
-## JOIN Operations Analysis
+#### Example 1: Booking Join with User
+```sql
+EXPLAIN SELECT * 
+FROM Booking b
+JOIN User u ON b.user_id = u.user_id
+WHERE b.status = 'Confirmed';
 
+
+
+EXPLAIN SELECT * 
+FROM Booking b
+JOIN Property p ON b.property_id = p.property_id
+WHERE p.location = 'Lagos';
 **Common JOIN patterns that need indexing:**
 ```sql
 -- User-Booking joins
